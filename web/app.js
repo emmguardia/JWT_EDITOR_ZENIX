@@ -20,7 +20,8 @@
     "secret-input", "btn-verify", "verify-result",
     "btn-resign", "resign-wrap", "resign-output", "btn-copy",
     "btn-sample",
-    "crack-token", "wordlist-input", "opt-john",
+    "crack-token", "opt-john",
+    "wordlist-select", "btn-wl-import", "btn-wl-export", "btn-wl-delete", "wl-empty", "wl-msg",
     "btn-crack", "btn-install-hashcat", "crack-spinner",
     "crack-result", "crack-log-wrap", "crack-log",
     "hashcat-status",
@@ -256,18 +257,120 @@
     els["crack-log-wrap"].hidden = false;
   }
 
+  // ---- gestion des wordlists ----
+  function humanSize(n) {
+    if (n == null) return "";
+    const u = ["o", "Ko", "Mo", "Go", "To"];
+    let i = 0, v = n;
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return (i === 0 ? v : v.toFixed(1)) + " " + u[i];
+  }
+
+  function wlMsg(kind, text) {
+    const box = els["wl-msg"];
+    box.className = "wl-msg " + (kind || "");
+    box.textContent = text || "";
+  }
+
+  function updateWlButtons() {
+    const has = !!els["wordlist-select"].value;
+    els["btn-wl-export"].disabled = !has;
+    els["btn-wl-delete"].disabled = !has;
+  }
+
+  async function refreshWordlists(keepSelection) {
+    const a = api();
+    const sel = els["wordlist-select"];
+    if (!a) { els["wl-empty"].hidden = false; return; }
+    const prev = keepSelection ? sel.value : null;
+    let data;
+    try {
+      data = await a.list_wordlists();
+    } catch (e) {
+      wlMsg("err", "Lecture des wordlists impossible : " + e.message);
+      return;
+    }
+    const items = (data && data.items) || [];
+    sel.innerHTML = "";
+    items.forEach((it) => {
+      const o = document.createElement("option");
+      o.value = it.name;
+      o.textContent = it.name + "  —  " + humanSize(it.size);
+      sel.appendChild(o);
+    });
+    els["wl-empty"].hidden = items.length > 0;
+    if (prev && items.some((it) => it.name === prev)) sel.value = prev;
+    else if (items.length) sel.selectedIndex = 0;
+    updateWlButtons();
+  }
+
+  async function onImportWordlist() {
+    const a = api();
+    if (!a) { wlMsg("err", "Backend indisponible."); return; }
+    wlMsg("", "Sélection du fichier…");
+    try {
+      const r = await a.import_wordlist();
+      if (r && r.cancelled) { wlMsg("", ""); return; }
+      if (r && r.ok) {
+        await refreshWordlists();
+        if (r.added && r.added.length) els["wordlist-select"].value = r.added[r.added.length - 1];
+        updateWlButtons();
+        let msg = "Importé : " + (r.added || []).join(", ");
+        if (r.errors && r.errors.length) msg += " · erreurs : " + r.errors.join(" ; ");
+        wlMsg("ok", msg);
+      } else {
+        wlMsg("err", "Import impossible" + (r && r.errors && r.errors.length ? " : " + r.errors.join(" ; ") : (r && r.error ? " : " + r.error : "")));
+      }
+    } catch (e) {
+      wlMsg("err", "Import impossible : " + e.message);
+    }
+  }
+
+  async function onExportWordlist() {
+    const a = api();
+    const name = els["wordlist-select"].value;
+    if (!a || !name) return;
+    wlMsg("", "Choix de la destination…");
+    try {
+      const r = await a.export_wordlist(name);
+      if (r && r.cancelled) { wlMsg("", ""); return; }
+      if (r && r.ok) wlMsg("ok", "Exporté vers : " + r.path);
+      else wlMsg("err", "Export impossible : " + ((r && r.error) || "inconnue"));
+    } catch (e) {
+      wlMsg("err", "Export impossible : " + e.message);
+    }
+  }
+
+  async function onDeleteWordlist() {
+    const a = api();
+    const name = els["wordlist-select"].value;
+    if (!a || !name) return;
+    if (!confirm("Supprimer la wordlist « " + name + " » du dossier de l'app ?")) return;
+    try {
+      const r = await a.delete_wordlist(name);
+      if (r && r.ok) {
+        await refreshWordlists();
+        wlMsg("ok", "Supprimé : " + name);
+      } else {
+        wlMsg("err", "Suppression impossible : " + ((r && r.error) || "inconnue"));
+      }
+    } catch (e) {
+      wlMsg("err", "Suppression impossible : " + e.message);
+    }
+  }
+
   async function onCrack() {
     const a = api();
     if (!a) { setResult("err", "Backend indisponible : lance l'application via run.sh / le lanceur."); return; }
 
     const token = els["crack-token"].value.trim();
-    const wordlist = els["wordlist-input"].value.trim();
+    const wordlist = els["wordlist-select"].value;
     const useJohn = els["opt-john"].checked;
 
     if (!token) { setResult("err", "Aucun token à cracker."); return; }
     // petite validation structurelle
     try { JWT.decode(token); } catch (e) { setResult("err", "Token invalide : " + e.message); return; }
-    if (!wordlist) { setResult("err", "Indique le chemin d'une wordlist."); return; }
+    if (!wordlist) { setResult("err", "Importe et sélectionne une wordlist d'abord."); return; }
 
     els["btn-crack"].disabled = true;
     els["crack-spinner"].hidden = false;
@@ -308,9 +411,17 @@
   els["btn-copy"].addEventListener("click", onCopy);
   els["btn-crack"].addEventListener("click", onCrack);
   els["btn-install-hashcat"].addEventListener("click", onInstallHashcat);
+  els["btn-wl-import"].addEventListener("click", onImportWordlist);
+  els["btn-wl-export"].addEventListener("click", onExportWordlist);
+  els["btn-wl-delete"].addEventListener("click", onDeleteWordlist);
+  els["wordlist-select"].addEventListener("change", updateWlButtons);
 
+  function onReady() {
+    refreshHashcatStatus();
+    refreshWordlists();
+  }
   // Le backend pywebview peut ne pas être prêt immédiatement
-  window.addEventListener("pywebviewready", refreshHashcatStatus);
+  window.addEventListener("pywebviewready", onReady);
   // repli si l'évènement est déjà passé
-  setTimeout(refreshHashcatStatus, 800);
+  setTimeout(onReady, 800);
 })();

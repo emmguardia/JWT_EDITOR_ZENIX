@@ -23,6 +23,10 @@ hashcat en local.
 - **Crack du secret HMAC** via `hashcat -a 0 -m 16500` (mode JWT). Si le secret
   est dans la wordlist, il s'affiche et est pré-rempli pour vérifier/re-signer.
   Détection automatique de l'absence de hashcat + bouton d'installation.
+- **Gestionnaire de wordlists** intégré : *Importer* copie n'importe quel fichier
+  dans le dossier `wordlists/` de l'app (tu peux ensuite supprimer l'original de
+  tes Téléchargements) ; *Exporter* en récupère une copie ailleurs ; *Supprimer*
+  la retire du dossier. On choisit la wordlist à utiliser dans la liste.
 - **Fallback John the Ripper** (expérimental, case à cocher) — voir plus bas.
 
 ## Prérequis
@@ -80,8 +84,9 @@ le secret, puis *Vérifier* pour confirmer.
   `--force` activé, potfile isolé par run, timeout de 20 min.
 - Le JWT est écrit dans un fichier temporaire local (supprimé après), jamais
   transmis sur le réseau.
-- Wordlist par défaut : `~/Téléchargements/wordlist-rockyou.txt` (modifiable
-  dans le champ).
+- Les wordlists vivent dans `wordlists/` (à la racine du projet, ignoré par git).
+  Utilise *Importer…* pour en ajouter autant que tu veux ; elles sont copiées,
+  donc tu peux supprimer les originaux. *Exporter* / *Supprimer* pour gérer la place.
 
 ### Fallback John the Ripper (expérimental)
 
