@@ -1,0 +1,17 @@
+# venv / Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# fichiers temporaires du crack
+jwtzenix_*
+*.hash
+*.pot
+
+# divers OS/éditeurs
+.DS_Store
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,4 @@
+# Dépendance Python de l'application desktop.
+# Le décodage/signature JWT est fait en JS pur côté client (web/crypto.js),
+# donc pas besoin de PyJWT. pywebview s'appuie sur le WebView système (WebKitGTK).
+pywebview>=5.0

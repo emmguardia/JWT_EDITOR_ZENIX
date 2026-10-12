@@ -1,0 +1,296 @@
+/* JWT Editor — Zenix Web. Thème sombre, sobre et moderne (inspiration jwt.io). */
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --bg-input: #0b0f14;
+  --border: #272e38;
+  --border-strong: #3a434f;
+  --text: #e6edf3;
+  --text-dim: #9aa5b1;
+  --text-faint: #6b7684;
+  --accent: #00b9f1;        /* signature / primaire */
+  --accent-2: #1f6feb;
+  --header-col: #fb015b;    /* rouge jwt.io */
+  --payload-col: #d63aff;   /* violet jwt.io */
+  --signature-col: #00b9f1; /* cyan jwt.io */
+  --ok: #3fb950;
+  --ko: #f85149;
+  --danger: #da3633;
+  --radius: 10px;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --font-ui: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ---------------- Header ---------------- */
+.topbar {
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #11161d, var(--bg));
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: var(--accent);
+  color: #042330;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+.brand h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.subtitle { margin: 6px 0 0; color: var(--text-dim); font-size: 13px; }
+
+/* ---------------- Layout ---------------- */
+main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.card.wide { grid-column: 1 / -1; }
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.card-head h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.hint { color: var(--text-dim); font-size: 12.5px; margin: 0 0 10px; }
+.hint.small { margin: 0; }
+code {
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+/* ---------------- Champs ---------------- */
+textarea, input[type="text"] {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+textarea:focus, input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, .25);
+}
+#token-input { min-height: 150px; word-break: break-all; }
+
+/* Aperçu coloré des 3 parties du token (comme jwt.io) */
+.token-colored {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  word-break: break-all;
+  line-height: 1.6;
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-height: 24px;
+  display: none;
+}
+.token-colored.show { display: block; }
+.tc-header { color: var(--header-col); }
+.tc-payload { color: var(--payload-col); }
+.tc-signature { color: var(--signature-col); }
+.tc-dot { color: var(--text-faint); }
+
+/* ---------------- Blocs décodés ---------------- */
+.block-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 12px 0 4px;
+  text-transform: uppercase;
+}
+.block-label span { color: var(--text-faint); font-weight: 500; letter-spacing: .5px; }
+.part-header { color: var(--header-col); }
+.part-payload { color: var(--payload-col); }
+.part-signature { color: var(--signature-col); }
+.json-edit { min-height: 92px; }
+textarea.part-header { border-color: rgba(251, 1, 91, .35); }
+textarea.part-payload { border-color: rgba(214, 58, 255, .35); }
+input.part-signature { border-color: rgba(0, 185, 241, .35); color: var(--signature-col); }
+
+.claims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+.claim-chip {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: var(--text-dim);
+}
+.claim-chip b { color: var(--text); font-weight: 600; }
+.claim-chip.expired b { color: var(--ko); }
+
+/* ---------------- Boutons ---------------- */
+button {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter .12s ease, background .12s ease;
+}
+button:hover { filter: brightness(1.12); }
+button:active { filter: brightness(.95); }
+.primary { background: var(--accent-2); color: #fff; }
+.danger { background: var(--danger); color: #fff; }
+.ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+}
+.ghost:hover { color: var(--text); }
+
+/* ---------------- Vérif / re-signature ---------------- */
+.verify-box, .resign-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.verify-box label { font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 4px; }
+.secret-row { display: flex; gap: 8px; }
+.secret-row input { flex: 1; }
+.verify-result { margin-top: 8px; font-size: 13px; font-weight: 600; min-height: 18px; }
+.verify-result.ok { color: var(--ok); }
+.verify-result.ko { color: var(--ko); }
+
+.resign-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.resign-output { margin-top: 10px; display: flex; gap: 8px; align-items: flex-start; }
+.resign-output textarea { flex: 1; min-height: 80px; word-break: break-all; color: var(--accent); }
+
+/* ---------------- Crack ---------------- */
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+}
+.pill-ok { color: var(--ok); border-color: var(--ok); }
+.pill-ko { color: var(--ko); border-color: var(--ko); }
+.pill-unknown { color: var(--text-faint); }
+
+.crack-controls, .crack-options { margin-top: 10px; }
+.crack-controls label { font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 4px; }
+.checkbox { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
+.checkbox input { width: auto; }
+
+.crack-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.spinner { display: inline-flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; }
+.spinner .dot {
+  width: 12px; height: 12px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.crack-result { margin-top: 14px; font-size: 14px; min-height: 20px; }
+.crack-result.ok { color: var(--ok); }
+.crack-result.ko { color: var(--text-dim); }
+.crack-result.err { color: var(--ko); }
+.crack-result .secret {
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  border: 1px solid var(--ok);
+  border-radius: 6px;
+  padding: 3px 10px;
+  color: var(--ok);
+  font-weight: 700;
+  margin-left: 6px;
+}
+#crack-log-wrap { margin-top: 10px; }
+#crack-log-wrap summary { cursor: pointer; color: var(--text-dim); font-size: 12px; }
+pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------------- Erreurs / footer ---------------- */
+.error {
+  margin-top: 10px;
+  color: var(--ko);
+  font-size: 13px;
+  background: rgba(248, 81, 73, .08);
+  border: 1px solid rgba(248, 81, 73, .3);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.footer .dim { color: var(--text-faint); }
+
+@media (max-width: 860px) {
+  main { grid-template-columns: 1fr; }
+}
