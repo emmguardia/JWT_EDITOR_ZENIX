@@ -12,9 +12,15 @@ Le backend Python ne sert QUE pour le crack et l'installation de hashcat :
 
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import webview  # pywebview
 
@@ -27,6 +33,11 @@ INDEX = os.path.join(WEB_DIR, "index.html")
 HASHCAT_MODE = "16500"
 # Garde-fou : on ne laisse pas un crack tourner indéfiniment (secondes)
 CRACK_TIMEOUT = 60 * 20  # 20 min
+
+# Garde-fous pour le brute-force de login HTTP
+BRUTE_TIMEOUT = 60 * 10      # durée max d'une attaque (10 min)
+BRUTE_MAX_ATTEMPTS = 50000   # nb max de mots de passe testés par run
+BRUTE_MAX_THREADS = 50
 
 
 # Dossier des wordlists gérées par l'app. On importe dedans (copie) ; l'utilisateur
@@ -313,6 +324,173 @@ class Api:
             return {"found": True, "secret": plain, "output": full}
         # hashcat renvoie 1 quand « exhausted » sans trouver : ce n'est pas une erreur
         return {"found": False, "output": full}
+
+    # ---- brute-force de login HTTP ---------------------------------------
+    def brute_login(self, cfg) -> dict:
+        """
+        Brute-force un formulaire de login HTTP (façon hydra http-post-form).
+        cfg (dict venu du JS) :
+          url, method (POST/GET), body_type (form/json),
+          template (corps avec ^USER^ / ^PASS^), username,
+          wordlist (nom), detect (fail_contains|success_contains|status),
+          match (texte), status_code (int), headers (texte "Clé: valeur"/ligne),
+          insecure (bool), stop_first (bool), threads (int), req_timeout (float).
+        Renvoie {found, username, password, code, attempts, output, error}.
+        """
+        cfg = cfg or {}
+        url = (cfg.get("url") or "").strip()
+        if not url.lower().startswith(("http://", "https://")):
+            return {"found": False, "error": "URL invalide (doit commencer par http:// ou https://)."}
+
+        method = (cfg.get("method") or "POST").upper()
+        body_type = (cfg.get("body_type") or "form").lower()
+        template = cfg.get("template") or "username=^USER^&password=^PASS^"
+        username = cfg.get("username") or ""
+        detect = cfg.get("detect") or "fail_contains"
+        match = cfg.get("match") or ""
+        insecure = bool(cfg.get("insecure"))
+        stop_first = cfg.get("stop_first", True)
+
+        if "^PASS^" not in template:
+            return {"found": False, "error": "le corps doit contenir le marqueur ^PASS^."}
+        if detect in ("fail_contains", "success_contains") and not match:
+            return {"found": False, "error": "indique le texte à détecter."}
+        status_code = None
+        if detect == "status":
+            try:
+                status_code = int(cfg.get("status_code"))
+            except (TypeError, ValueError):
+                return {"found": False, "error": "code HTTP de succès invalide."}
+
+        base = safe_name(cfg.get("wordlist") or "")
+        if not base:
+            return {"found": False, "error": "wordlist invalide."}
+        wl = os.path.join(WORDLISTS_DIR, base)
+        if not os.path.isfile(wl):
+            return {"found": False, "error": "Wordlist introuvable : %s" % base}
+
+        try:
+            threads = max(1, min(int(cfg.get("threads") or 10), BRUTE_MAX_THREADS))
+        except (TypeError, ValueError):
+            threads = 10
+        try:
+            req_timeout = float(cfg.get("req_timeout") or 8)
+        except (TypeError, ValueError):
+            req_timeout = 8.0
+
+        # en-têtes personnalisés
+        headers = {"User-Agent": "JWT-Editor-Zenix/1.0"}
+        for line in (cfg.get("headers") or "").splitlines():
+            line = line.strip()
+            if line and ":" in line:
+                k, v = line.split(":", 1)
+                headers[k.strip()] = v.strip()
+
+        # état partagé entre threads
+        stop = threading.Event()
+        lock = threading.Lock()
+        state = {"found": None, "attempts": 0, "errors": 0, "last_error": None}
+        deadline = time.time() + BRUTE_TIMEOUT
+
+        def test(pw):
+            if stop.is_set() or time.time() > deadline:
+                return
+            body = template.replace("^USER^", username).replace("^PASS^", pw)
+            code, text, err = self._http_attempt(
+                url, method, body_type, body, headers, req_timeout, insecure)
+            with lock:
+                state["attempts"] += 1
+                if err:
+                    state["errors"] += 1
+                    state["last_error"] = err
+            if err:
+                return
+            if detect == "fail_contains":
+                ok = match not in text
+            elif detect == "success_contains":
+                ok = match in text
+            else:  # status
+                ok = (code == status_code)
+            if ok and not stop.is_set():
+                with lock:
+                    if state["found"] is None:
+                        state["found"] = {"password": pw, "code": code}
+                if stop_first:
+                    stop.set()
+
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            with open(wl, encoding="utf-8", errors="ignore") as f:
+                for i, line in enumerate(f):
+                    if i >= BRUTE_MAX_ATTEMPTS or stop.is_set() or time.time() > deadline:
+                        break
+                    pw = line.rstrip("\r\n")
+                    if pw == "":
+                        continue
+                    ex.submit(test, pw)
+
+        attempts = state["attempts"]
+        out = "%d mot(s) de passe testé(s)." % attempts
+        if state["found"]:
+            return {
+                "found": True,
+                "username": username,
+                "password": state["found"]["password"],
+                "code": state["found"]["code"],
+                "attempts": attempts,
+                "output": out,
+            }
+        # si tout a échoué au niveau réseau, c'est une erreur de config/cible
+        if attempts > 0 and state["errors"] == attempts:
+            return {"found": False, "error": "aucune requête n'a abouti : %s" % state["last_error"],
+                    "attempts": attempts, "output": out}
+        if attempts >= BRUTE_MAX_ATTEMPTS:
+            out += " (limite de %d atteinte)" % BRUTE_MAX_ATTEMPTS
+        elif time.time() > deadline:
+            out += " (délai de %ss atteint)" % BRUTE_TIMEOUT
+        return {"found": False, "attempts": attempts, "output": out}
+
+    @staticmethod
+    def _make_opener(insecure):
+        """Opener urllib qui NE suit PAS les redirections (pour voir les 3xx)."""
+        class _NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        handlers = [_NoRedirect()]
+        if insecure:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            handlers.append(urllib.request.HTTPSHandler(context=ctx))
+        return urllib.request.build_opener(*handlers)
+
+    def _http_attempt(self, url, method, body_type, body, headers, timeout, insecure):
+        """Envoie une requête, renvoie (code, texte, erreur). Ne suit pas les redirections."""
+        hdrs = dict(headers)
+        data = None
+        full_url = url
+        if method == "POST":
+            data = body.encode("utf-8")
+            if body_type == "json":
+                hdrs.setdefault("Content-Type", "application/json")
+            else:
+                hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded")
+        else:  # GET : on colle le corps en query string
+            sep = "&" if "?" in url else "?"
+            full_url = url + sep + body
+        opener = self._make_opener(insecure)
+        req = urllib.request.Request(full_url, data=data, headers=hdrs, method=method)
+        try:
+            resp = opener.open(req, timeout=timeout)
+            text = resp.read(65536).decode("utf-8", "ignore")
+            return resp.getcode(), text, None
+        except urllib.error.HTTPError as e:
+            try:
+                text = e.read(65536).decode("utf-8", "ignore")
+            except Exception:
+                text = ""
+            return e.code, text, None
+        except Exception as e:
+            return None, "", str(e)
 
     # ---- utilitaires ------------------------------------------------------
     @staticmethod
