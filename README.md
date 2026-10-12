@@ -31,6 +31,10 @@ hashcat en local.
   **brute-force** (masque : jeux de caractères `a-z/A-Z/0-9/spéciaux` + longueur max)
   ou par **dictionnaire** (mêmes wordlists). Choix du type de hash
   (MD5, SHA1, SHA-256/512, NTLM, bcrypt, md5crypt, sha512crypt).
+- **Onglet « URL »** : brute-force d'un login HTTP (façon `hydra http-post-form`),
+  en Python pur. URL + corps avec marqueurs `^USER^`/`^PASS^`, détection du succès
+  par texte (présent/absent) ou code HTTP, en-têtes custom, threads, timeout,
+  option TLS non vérifié. **Sur cibles autorisées uniquement.**
 
 ## Prérequis
 
@@ -98,6 +102,15 @@ Pour cracker un hash qui n'est pas un JWT. Colle le hash, choisis son type, puis
   spéciaux) et une longueur max ; hashcat teste toutes les combinaisons de 1 à N
   caractères (`-a 3 -i`). Au-delà de 6-7 caractères ça peut être très long.
 - **Dictionnaire** : réutilise les wordlists importées (`-a 0`).
+
+### Onglet « URL » (brute-force de login HTTP)
+
+En Python pur (stdlib `urllib` + threads, aucune dépendance en plus). Tu donnes
+l'URL du formulaire et le corps avec les marqueurs `^USER^` / `^PASS^` ; chaque
+mot de passe de la wordlist est testé, et le succès est détecté selon ton choix :
+texte d'échec absent, texte de succès présent, ou code HTTP attendu (les
+redirections 3xx ne sont pas suivies, pour pouvoir détecter un 302 de login réussi).
+Garde-fous : max 50 000 essais, 50 threads, et 10 min par attaque.
 
 ## ⚠️ Avertissement légal
 

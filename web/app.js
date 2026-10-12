@@ -28,6 +28,10 @@
     "mdp-cs-l", "mdp-cs-u", "mdp-cs-d", "mdp-cs-s",
     "mdp-crack", "mdp-spinner", "mdp-result", "mdp-log-wrap", "mdp-log",
     "mdp-hashcat-status",
+    "url-target", "url-method", "url-bodytype", "url-template", "url-username",
+    "url-headers", "url-detect", "url-detect-value", "url-threads", "url-timeout",
+    "url-stopfirst", "url-insecure", "btn-wl-import-url",
+    "url-crack", "url-spinner", "url-result", "url-log-wrap", "url-log",
   ].forEach((id) => (els[id] = $(id)));
 
   function escapeHtml(s) {
@@ -47,6 +51,7 @@
   }
   const jwtOut = outputCtrl(els["crack-result"], els["crack-log-wrap"], els["crack-log"]);
   const mdpOut = outputCtrl(els["mdp-result"], els["mdp-log-wrap"], els["mdp-log"]);
+  const urlOut = outputCtrl(els["url-result"], els["url-log-wrap"], els["url-log"]);
 
   function api() {
     return (window.pywebview && window.pywebview.api) || null;
@@ -255,6 +260,7 @@
   const WL_CONTAINERS = [
     { list: "wordlist-list", empty: "wl-empty" },
     { list: "wordlist-list-mdp", empty: "wl-empty-mdp" },
+    { list: "wordlist-list-url", empty: "wl-empty-url" },
   ];
   let wordlistItems = [];
   let selectedWordlist = null;
@@ -479,6 +485,73 @@
   }
 
   // ==========================================================================
+  // ONGLET URL — brute-force de login HTTP
+  // ==========================================================================
+  function onUrlDetectChange() {
+    const d = els["url-detect"].value;
+    const inp = els["url-detect-value"];
+    if (d === "status") { inp.placeholder = "ex. 302"; inp.type = "number"; }
+    else { inp.type = "text"; inp.placeholder = d === "success_contains" ? "ex. Bienvenue" : "ex. Identifiants invalides"; }
+  }
+
+  async function onUrlCrack() {
+    const a = api();
+    if (!a) { urlOut.set("err", "Backend indisponible : lance l'application via run.sh / le lanceur."); return; }
+
+    const url = els["url-target"].value.trim();
+    const template = els["url-template"].value;
+    const detect = els["url-detect"].value;
+    const dval = els["url-detect-value"].value.trim();
+    const wordlist = selectedWordlist;
+
+    if (!url) { urlOut.set("err", "Indique l'URL du login."); return; }
+    if (template.indexOf("^PASS^") === -1) { urlOut.set("err", "Le corps doit contenir le marqueur ^PASS^."); return; }
+    if (!wordlist) { urlOut.set("err", "Importe et sélectionne une wordlist de mots de passe."); return; }
+    if (detect !== "status" && !dval) { urlOut.set("err", "Indique le texte à détecter."); return; }
+    if (detect === "status" && !dval) { urlOut.set("err", "Indique le code HTTP de succès."); return; }
+
+    const cfg = {
+      url: url,
+      method: els["url-method"].value,
+      body_type: els["url-bodytype"].value,
+      template: template,
+      username: els["url-username"].value,
+      wordlist: wordlist,
+      detect: detect,
+      match: detect === "status" ? "" : dval,
+      status_code: detect === "status" ? dval : null,
+      headers: els["url-headers"].value,
+      threads: parseInt(els["url-threads"].value, 10) || 10,
+      req_timeout: parseFloat(els["url-timeout"].value) || 8,
+      stop_first: els["url-stopfirst"].checked,
+      insecure: els["url-insecure"].checked,
+    };
+
+    els["url-crack"].disabled = true;
+    els["url-spinner"].hidden = false;
+    urlOut.set("ko", "Attaque en cours…");
+    urlOut.log("");
+    try {
+      const r = await a.brute_login(cfg);
+      if (r && r.found) {
+        urlOut.set("ok", "Identifiants trouvés : <span class=\"secret\">" +
+          escapeHtml(r.username || "") + " : " + escapeHtml(r.password) + "</span>" +
+          " (code HTTP " + escapeHtml(String(r.code)) + ")");
+      } else if (r && r.error) {
+        urlOut.set("err", "Erreur : " + escapeHtml(r.error));
+      } else {
+        urlOut.set("ko", "Aucun mot de passe valide trouvé.");
+      }
+      urlOut.log((r && r.output) || "");
+    } catch (e) {
+      urlOut.set("err", "Erreur backend : " + e.message);
+    } finally {
+      els["url-crack"].disabled = false;
+      els["url-spinner"].hidden = true;
+    }
+  }
+
+  // ==========================================================================
   // Câblage
   // ==========================================================================
   els["token-input"].addEventListener("input", onTokenChange);
@@ -494,10 +567,14 @@
   els["btn-install-hashcat"].addEventListener("click", onInstallHashcat);
   els["btn-wl-import"].addEventListener("click", onImportWordlist);
   els["btn-wl-import-mdp"].addEventListener("click", onImportWordlist);
+  els["btn-wl-import-url"].addEventListener("click", onImportWordlist);
 
   document.querySelectorAll('input[name="mdp-attack"]').forEach((r) =>
     r.addEventListener("change", onAttackChange));
   els["mdp-crack"].addEventListener("click", onMdpCrack);
+
+  els["url-detect"].addEventListener("change", onUrlDetectChange);
+  els["url-crack"].addEventListener("click", onUrlCrack);
 
   function onReady() {
     refreshHashcatStatus();

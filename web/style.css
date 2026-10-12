@@ -127,7 +127,7 @@ code {
 }
 
 /* ---------------- Champs ---------------- */
-textarea, input[type="text"] {
+textarea, input[type="text"], input[type="number"] {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -138,7 +138,8 @@ textarea, input[type="text"] {
   padding: 10px 12px;
   resize: vertical;
 }
-textarea:focus, input[type="text"]:focus {
+input[type="number"] { padding: 7px 10px; }
+textarea:focus, input[type="text"]:focus, input[type="number"]:focus {
   outline: none;
   border-color: var(--accent-2);
   box-shadow: 0 0 0 2px rgba(31, 111, 235, .25);

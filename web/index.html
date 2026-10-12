@@ -19,6 +19,7 @@
   <nav class="tabs">
     <button class="tab active" type="button" data-tab="jwt">JWT</button>
     <button class="tab" type="button" data-tab="mdp">Mot de passe</button>
+    <button class="tab" type="button" data-tab="url">URL</button>
   </nav>
 
   <!-- ====================================================================== -->
@@ -207,6 +208,98 @@
       <details id="mdp-log-wrap" hidden>
         <summary>Sortie brute</summary>
         <pre id="mdp-log"></pre>
+      </details>
+    </section>
+  </main>
+
+  <!-- ====================================================================== -->
+  <!-- ONGLET URL — brute-force de login HTTP                                 -->
+  <!-- ====================================================================== -->
+  <main class="tab-panel" data-panel="url" hidden>
+    <section class="card wide" id="url-card">
+      <div class="card-head">
+        <h2>Brute-force d'un login HTTP</h2>
+      </div>
+      <p class="hint">
+        Teste une liste de mots de passe contre un formulaire de login (façon
+        <code>hydra http-post-form</code>). Les requêtes partent de ta machine vers
+        la cible : <b>uniquement sur un site que tu es autorisé à tester</b>.
+      </p>
+
+      <label class="block-label" for="url-target">URL du login</label>
+      <input id="url-target" type="text" spellcheck="false" autocomplete="off"
+        placeholder="https://cible.exemple/login" />
+
+      <div class="mdp-row">
+        <label for="url-method">Méthode</label>
+        <select id="url-method">
+          <option value="POST">POST</option>
+          <option value="GET">GET</option>
+        </select>
+        <label for="url-bodytype">Corps</label>
+        <select id="url-bodytype">
+          <option value="form">Formulaire (x-www-form-urlencoded)</option>
+          <option value="json">JSON</option>
+        </select>
+      </div>
+
+      <label class="block-label" for="url-template">Données envoyées <span>(marqueurs ^USER^ et ^PASS^)</span></label>
+      <textarea id="url-template" class="json-edit" spellcheck="false" autocomplete="off">username=^USER^&password=^PASS^</textarea>
+
+      <div class="mdp-row">
+        <label for="url-username">Nom d'utilisateur (^USER^)</label>
+        <input id="url-username" type="text" spellcheck="false" autocomplete="off"
+          placeholder="admin" style="flex:1;min-width:180px;" />
+      </div>
+
+      <label class="block-label" for="url-headers">En-têtes optionnels <span>(un par ligne : Nom: valeur)</span></label>
+      <textarea id="url-headers" class="json-edit" spellcheck="false" autocomplete="off"
+        placeholder="Cookie: session=...&#10;X-CSRF-Token: ..." style="min-height:60px;"></textarea>
+
+      <div class="mdp-row">
+        <label for="url-detect">Détecter le succès</label>
+        <select id="url-detect">
+          <option value="fail_contains">Échec si ce texte apparaît</option>
+          <option value="success_contains">Succès si ce texte apparaît</option>
+          <option value="status">Succès si le code HTTP est</option>
+        </select>
+        <input id="url-detect-value" type="text" spellcheck="false" autocomplete="off"
+          placeholder="ex. Identifiants invalides" style="flex:1;min-width:180px;" />
+      </div>
+
+      <div class="mdp-row">
+        <label for="url-threads">Threads</label>
+        <input id="url-threads" type="number" min="1" max="50" value="10" style="width:80px;" />
+        <label for="url-timeout">Timeout/req (s)</label>
+        <input id="url-timeout" type="number" min="1" max="60" value="8" style="width:80px;" />
+        <label class="checkbox"><input type="checkbox" id="url-stopfirst" checked> s'arrêter au 1er trouvé</label>
+        <label class="checkbox"><input type="checkbox" id="url-insecure"> ignorer les erreurs TLS</label>
+      </div>
+
+      <div class="attack-opts">
+        <div class="wordlist-manager">
+          <div class="wl-head">
+            <label>Wordlist de mots de passe <span class="dimlabel">(coche celle à utiliser)</span></label>
+            <button id="btn-wl-import-url" class="ghost" type="button">+ Importer…</button>
+          </div>
+          <ul id="wordlist-list-url" class="wl-list"></ul>
+          <p id="wl-empty-url" class="hint small">
+            Aucune wordlist importée. Clique <b>+ Importer…</b> (copie dans <code>wordlists/</code>).
+          </p>
+        </div>
+      </div>
+
+      <div class="wl-msg"></div>
+
+      <div class="crack-actions">
+        <button id="url-crack" class="danger" type="button">Lancer l'attaque</button>
+        <span id="url-spinner" class="spinner" hidden><span class="dot"></span> Attaque en cours…</span>
+      </div>
+
+      <div id="url-result" class="crack-result"></div>
+      <details id="url-log-wrap" hidden>
+        <summary>Détails</summary>
+        <pre id="url-log"></pre>
       </details>
     </section>
   </main>
