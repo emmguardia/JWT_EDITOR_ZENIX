@@ -21,7 +21,7 @@
     "btn-resign", "resign-wrap", "resign-output", "btn-copy",
     "btn-sample",
     "crack-token", "opt-john",
-    "wordlist-select", "btn-wl-import", "btn-wl-export", "btn-wl-delete", "wl-empty", "wl-msg",
+    "wordlist-list", "btn-wl-import", "wl-empty", "wl-msg",
     "btn-crack", "btn-install-hashcat", "crack-spinner",
     "crack-result", "crack-log-wrap", "crack-log",
     "hashcat-status",
@@ -258,6 +258,8 @@
   }
 
   // ---- gestion des wordlists ----
+  let selectedWordlist = null; // nom de la wordlist utilisée pour le crack
+
   function humanSize(n) {
     if (n == null) return "";
     const u = ["o", "Ko", "Mo", "Go", "To"];
@@ -272,17 +274,79 @@
     box.textContent = text || "";
   }
 
-  function updateWlButtons() {
-    const has = !!els["wordlist-select"].value;
-    els["btn-wl-export"].disabled = !has;
-    els["btn-wl-delete"].disabled = !has;
+  // Construit la liste de lignes (radio = wordlist active)
+  function renderWordlists(items) {
+    const list = els["wordlist-list"];
+    list.innerHTML = "";
+    els["wl-empty"].hidden = items.length > 0;
+
+    // garde la sélection si elle existe encore, sinon prend la 1re
+    if (!items.some((it) => it.name === selectedWordlist)) {
+      selectedWordlist = items.length ? items[0].name : null;
+    }
+
+    items.forEach((it) => {
+      const li = document.createElement("li");
+      li.className = "wl-item" + (it.name === selectedWordlist ? " selected" : "");
+      li.dataset.name = it.name;
+
+      const pick = document.createElement("label");
+      pick.className = "wl-pick";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "wl";
+      radio.value = it.name;
+      radio.checked = it.name === selectedWordlist;
+      radio.addEventListener("change", () => {
+        selectedWordlist = it.name;
+        // met à jour le surlignage sans tout reconstruire
+        list.querySelectorAll(".wl-item").forEach((el) =>
+          el.classList.toggle("selected", el.dataset.name === selectedWordlist));
+        refreshTags();
+      });
+      const name = document.createElement("span");
+      name.className = "wl-name";
+      name.textContent = it.name;
+      name.title = it.name;
+      const size = document.createElement("span");
+      size.className = "wl-size";
+      size.textContent = humanSize(it.size);
+      pick.append(radio, name, size);
+
+      const actions = document.createElement("span");
+      actions.className = "wl-row-actions";
+      const tag = document.createElement("span");
+      tag.className = "wl-tag";
+      tag.textContent = "utilisée";
+      tag.hidden = it.name !== selectedWordlist;
+      const btnExp = document.createElement("button");
+      btnExp.type = "button";
+      btnExp.className = "wl-mini";
+      btnExp.textContent = "Exporter";
+      btnExp.addEventListener("click", () => exportWordlist(it.name));
+      const btnDel = document.createElement("button");
+      btnDel.type = "button";
+      btnDel.className = "wl-mini danger-text";
+      btnDel.textContent = "Supprimer";
+      btnDel.addEventListener("click", () => deleteWordlist(it.name));
+      actions.append(tag, btnExp, btnDel);
+
+      li.append(pick, actions);
+      list.appendChild(li);
+    });
   }
 
-  async function refreshWordlists(keepSelection) {
+  // Met à jour les badges "utilisée" selon la sélection courante
+  function refreshTags() {
+    els["wordlist-list"].querySelectorAll(".wl-item").forEach((el) => {
+      const tag = el.querySelector(".wl-tag");
+      if (tag) tag.hidden = el.dataset.name !== selectedWordlist;
+    });
+  }
+
+  async function refreshWordlists() {
     const a = api();
-    const sel = els["wordlist-select"];
     if (!a) { els["wl-empty"].hidden = false; return; }
-    const prev = keepSelection ? sel.value : null;
     let data;
     try {
       data = await a.list_wordlists();
@@ -290,18 +354,7 @@
       wlMsg("err", "Lecture des wordlists impossible : " + e.message);
       return;
     }
-    const items = (data && data.items) || [];
-    sel.innerHTML = "";
-    items.forEach((it) => {
-      const o = document.createElement("option");
-      o.value = it.name;
-      o.textContent = it.name + "  —  " + humanSize(it.size);
-      sel.appendChild(o);
-    });
-    els["wl-empty"].hidden = items.length > 0;
-    if (prev && items.some((it) => it.name === prev)) sel.value = prev;
-    else if (items.length) sel.selectedIndex = 0;
-    updateWlButtons();
+    renderWordlists((data && data.items) || []);
   }
 
   async function onImportWordlist() {
@@ -312,9 +365,9 @@
       const r = await a.import_wordlist();
       if (r && r.cancelled) { wlMsg("", ""); return; }
       if (r && r.ok) {
+        // sélectionne automatiquement la dernière importée
+        if (r.added && r.added.length) selectedWordlist = r.added[r.added.length - 1];
         await refreshWordlists();
-        if (r.added && r.added.length) els["wordlist-select"].value = r.added[r.added.length - 1];
-        updateWlButtons();
         let msg = "Importé : " + (r.added || []).join(", ");
         if (r.errors && r.errors.length) msg += " · erreurs : " + r.errors.join(" ; ");
         wlMsg("ok", msg);
@@ -326,9 +379,8 @@
     }
   }
 
-  async function onExportWordlist() {
+  async function exportWordlist(name) {
     const a = api();
-    const name = els["wordlist-select"].value;
     if (!a || !name) return;
     wlMsg("", "Choix de la destination…");
     try {
@@ -341,9 +393,8 @@
     }
   }
 
-  async function onDeleteWordlist() {
+  async function deleteWordlist(name) {
     const a = api();
-    const name = els["wordlist-select"].value;
     if (!a || !name) return;
     if (!confirm("Supprimer la wordlist « " + name + " » du dossier de l'app ?")) return;
     try {
@@ -364,7 +415,7 @@
     if (!a) { setResult("err", "Backend indisponible : lance l'application via run.sh / le lanceur."); return; }
 
     const token = els["crack-token"].value.trim();
-    const wordlist = els["wordlist-select"].value;
+    const wordlist = selectedWordlist;
     const useJohn = els["opt-john"].checked;
 
     if (!token) { setResult("err", "Aucun token à cracker."); return; }
@@ -412,9 +463,6 @@
   els["btn-crack"].addEventListener("click", onCrack);
   els["btn-install-hashcat"].addEventListener("click", onInstallHashcat);
   els["btn-wl-import"].addEventListener("click", onImportWordlist);
-  els["btn-wl-export"].addEventListener("click", onExportWordlist);
-  els["btn-wl-delete"].addEventListener("click", onDeleteWordlist);
-  els["wordlist-select"].addEventListener("change", updateWlButtons);
 
   function onReady() {
     refreshHashcatStatus();

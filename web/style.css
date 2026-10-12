@@ -229,24 +229,69 @@ button:active { filter: brightness(.95); }
 
 /* Gestionnaire de wordlists */
 .wordlist-manager { margin-top: 12px; }
-.wl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.wl-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .wl-head label { font-size: 12px; color: var(--text-dim); }
-.wl-actions { display: flex; gap: 6px; }
-.wl-actions button { padding: 5px 10px; font-size: 12px; }
+.wl-head .dimlabel { color: var(--text-faint); }
 button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
-#wordlist-select {
-  width: 100%;
+
+.wl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wl-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
-  color: var(--text);
+  padding: 8px 10px;
+  transition: border-color .12s ease, background .12s ease;
+}
+.wl-item:hover { border-color: var(--border-strong); }
+.wl-item.selected {
+  border-color: var(--accent);
+  background: rgba(0, 185, 241, .07);
+}
+.wl-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.wl-pick input[type="radio"] { width: auto; accent-color: var(--accent); flex: none; }
+.wl-name {
   font-family: var(--font-mono);
   font-size: 13px;
-  padding: 4px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-#wordlist-select option { padding: 4px 6px; }
-#wordlist-select:focus { outline: none; border-color: var(--accent-2); }
-.wl-msg { margin-top: 6px; font-size: 12px; min-height: 14px; color: var(--text-dim); }
+.wl-size { font-size: 11.5px; color: var(--text-faint); flex: none; }
+.wl-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex: none;
+}
+.wl-row-actions { display: flex; gap: 6px; flex: none; }
+.wl-mini {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+  padding: 3px 9px;
+  font-size: 11.5px;
+}
+.wl-mini:hover { color: var(--text); }
+.wl-mini.danger-text:hover { color: var(--ko); border-color: var(--ko); }
+
+.wl-msg { margin-top: 8px; font-size: 12px; min-height: 14px; color: var(--text-dim); }
 .wl-msg.ok { color: var(--ok); }
 .wl-msg.err { color: var(--ko); }
 .checkbox { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-dim); cursor: pointer; }
