@@ -88,16 +88,12 @@
 
       <div class="wordlist-manager">
         <div class="wl-head">
-          <label for="wordlist-select">Wordlists (copiées dans le dossier de l'app)</label>
-          <div class="wl-actions">
-            <button id="btn-wl-import" class="ghost" type="button">Importer…</button>
-            <button id="btn-wl-export" class="ghost" type="button" disabled>Exporter</button>
-            <button id="btn-wl-delete" class="ghost" type="button" disabled>Supprimer</button>
-          </div>
+          <label>Wordlist utilisée pour le crack <span class="dimlabel">(coche celle à utiliser)</span></label>
+          <button id="btn-wl-import" class="ghost" type="button">+ Importer…</button>
         </div>
-        <select id="wordlist-select" size="4"></select>
+        <ul id="wordlist-list" class="wl-list"></ul>
         <p id="wl-empty" class="hint small">
-          Aucune wordlist importée. Clique <b>Importer…</b> : le fichier est copié
+          Aucune wordlist importée. Clique <b>+ Importer…</b> : le fichier est copié
           dans <code>wordlists/</code> — tu peux ensuite le supprimer d'ailleurs.
         </p>
         <div id="wl-msg" class="wl-msg"></div>
