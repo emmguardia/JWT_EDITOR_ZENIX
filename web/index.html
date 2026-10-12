@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JWT Editor — Zenix Web</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">JWT</span>
+      <h1>Editor</h1>
+      <span class="badge" title="Zenix Web">Zenix Web</span>
+    </div>
+    <p class="subtitle">Décodeur · Éditeur · Re-signature · Crack HMAC (hashcat) — tout en local</p>
+  </header>
+
+  <main>
+    <!-- ================= COLONNE GAUCHE : TOKEN ENCODÉ ================= -->
+    <section class="card" id="encoded-card">
+      <div class="card-head">
+        <h2>Token encodé</h2>
+        <button class="ghost" id="btn-sample" type="button">Exemple</button>
+      </div>
+      <p class="hint">Colle ton JWT. Le décodage est instantané et 100&nbsp;% local (rien n'est envoyé).</p>
+      <textarea id="token-input" spellcheck="false" autocomplete="off"
+        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."></textarea>
+      <div id="token-colored" class="token-colored" aria-hidden="true"></div>
+      <div id="decode-error" class="error" hidden></div>
+    </section>
+
+    <!-- ================= COLONNE DROITE : DÉCODÉ ================= -->
+    <section class="card" id="decoded-card">
+      <div class="card-head">
+        <h2>Décodé</h2>
+      </div>
+
+      <label class="block-label part-header">HEADER <span>ALGORITHM &amp; TOKEN TYPE</span></label>
+      <textarea id="header-edit" class="json-edit part-header" spellcheck="false" autocomplete="off"></textarea>
+
+      <label class="block-label part-payload">PAYLOAD <span>DATA</span></label>
+      <textarea id="payload-edit" class="json-edit part-payload" spellcheck="false" autocomplete="off"></textarea>
+      <div id="claims-dates" class="claims"></div>
+
+      <label class="block-label part-signature">SIGNATURE</label>
+      <div class="signature-row">
+        <input id="signature-view" class="part-signature" type="text" readonly
+          placeholder="(signature base64url)" />
+      </div>
+
+      <div class="verify-box">
+        <label for="secret-input">Secret (HMAC)</label>
+        <div class="secret-row">
+          <input id="secret-input" type="text" spellcheck="false" autocomplete="off"
+            placeholder="your-256-bit-secret" />
+          <button id="btn-verify" class="primary" type="button">Vérifier</button>
+        </div>
+        <div id="verify-result" class="verify-result"></div>
+      </div>
+
+      <div class="resign-box">
+        <div class="resign-actions">
+          <button id="btn-resign" class="primary" type="button">Re-signer</button>
+          <span class="hint small">Régénère le token depuis Header + Payload édités, avec l'algo du header et le secret ci-dessus.</span>
+        </div>
+        <div class="resign-output" hidden id="resign-wrap">
+          <textarea id="resign-output" readonly spellcheck="false"></textarea>
+          <button id="btn-copy" class="ghost" type="button">Copier</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= SECTION CRACK ================= -->
+    <section class="card wide" id="crack-card">
+      <div class="card-head">
+        <h2>Crack du secret HMAC</h2>
+        <span id="hashcat-status" class="pill pill-unknown">hashcat : vérification…</span>
+      </div>
+      <p class="hint">
+        Utilise <code>hashcat -m 16500</code> (JWT HS*) en attaque par dictionnaire.
+        Le token repris ci-dessous est écrit dans un fichier temporaire local, jamais envoyé ailleurs.
+      </p>
+
+      <label class="block-label">JWT à cracker</label>
+      <textarea id="crack-token" class="json-edit" spellcheck="false" autocomplete="off"
+        placeholder="(repris automatiquement du champ Token encodé)"></textarea>
+
+      <div class="crack-controls">
+        <label for="wordlist-input">Wordlist</label>
+        <input id="wordlist-input" type="text" spellcheck="false" autocomplete="off"
+          value="~/Téléchargements/wordlist-rockyou.txt" />
+      </div>
+
+      <div class="crack-options">
+        <label class="checkbox">
+          <input type="checkbox" id="opt-john" />
+          Utiliser John the Ripper (expérimental) au lieu de hashcat
+        </label>
+      </div>
+
+      <div class="crack-actions">
+        <button id="btn-crack" class="danger" type="button">Cracker</button>
+        <button id="btn-install-hashcat" class="ghost" type="button" hidden>Installer hashcat</button>
+        <span id="crack-spinner" class="spinner" hidden><span class="dot"></span> Crack en cours…</span>
+      </div>
+
+      <div id="crack-result" class="crack-result"></div>
+      <details id="crack-log-wrap" hidden>
+        <summary>Sortie brute</summary>
+        <pre id="crack-log"></pre>
+      </details>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>⚠️ Usage légal uniquement — CTF et pentest autorisé. Tu es responsable de ce que tu craques.</span>
+    <span class="dim">JWT Editor · Zenix Web</span>
+  </footer>
+
+  <script src="crypto.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
