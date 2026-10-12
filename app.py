@@ -3,15 +3,14 @@
 """
 JWT Editor — Zenix Web
 Application de bureau (pywebview) : décodage/édition/re-signature de JWT
-(100 % côté client en JS) + crack du secret HMAC via hashcat (ou John, option).
+(100 % côté client en JS) + crack de secrets/mots de passe via hashcat.
 
 Le backend Python ne sert QUE pour le crack et l'installation de hashcat :
  - rien du token n'est envoyé sur le réseau ; il est juste écrit dans un
-   fichier temporaire local pour être passé à hashcat/john.
+   fichier temporaire local pour être passé à hashcat.
 """
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -70,9 +69,6 @@ class Api:
     # ---- détection / installation de hashcat -----------------------------
     def check_hashcat(self) -> bool:
         return shutil.which("hashcat") is not None
-
-    def check_john(self) -> bool:
-        return shutil.which("john") is not None
 
     # ---- gestion des wordlists -------------------------------------------
     def _window(self):
@@ -203,10 +199,10 @@ class Api:
         return {"ok": False, "error": "apt a échoué (code %s)." % proc.returncode, "output": output}
 
     # ---- crack ------------------------------------------------------------
-    def crack(self, token: str, wordlist_name: str, use_john: bool = False) -> dict:
+    def crack(self, token: str, wordlist_name: str) -> dict:
         """
-        Écrit le JWT dans un fichier temporaire et lance hashcat (ou John)
-        contre une wordlist importée (nom dans wordlists/).
+        Crack le secret HMAC d'un JWT : écrit le JWT dans un fichier temporaire
+        et lance hashcat -m 16500 contre une wordlist importée.
         Renvoie {found, secret, output, error}.
         """
         token = (token or "").strip()
@@ -219,39 +215,85 @@ class Api:
             return {"found": False, "error": "JWT invalide."}
         if not os.path.isfile(wordlist):
             return {"found": False, "error": "Wordlist introuvable : %s" % base}
+        if shutil.which("hashcat") is None:
+            return {"found": False, "error": "hashcat n'est pas installé."}
 
-        engine = "john" if use_john else "hashcat"
-        if shutil.which(engine) is None:
-            return {"found": False, "error": "%s n'est pas installé." % engine}
-
-        # fichier temporaire contenant le hash (= le JWT brut pour -m 16500)
         tmp = tempfile.NamedTemporaryFile(
             mode="w", prefix="jwtzenix_", suffix=".hash", delete=False
         )
         try:
             tmp.write(token + "\n")
             tmp.close()
-            if use_john:
-                return self._crack_john(tmp.name, wordlist)
-            return self._crack_hashcat(tmp.name, wordlist)
+            return self._run_hashcat(tmp.name, HASHCAT_MODE, ["-a", "0"], wordlist, token)
         finally:
-            # nettoyage du fichier temporaire + potfiles résiduels
-            for p in (tmp.name,):
-                try:
-                    os.remove(p)
-                except OSError:
-                    pass
+            self._rm(tmp.name)
 
-    def _crack_hashcat(self, hashfile: str, wordlist: str) -> dict:
-        # potfile dédié pour isoler le résultat de ce run
-        potfile = hashfile + ".pot"
-        base = [
-            "hashcat", "-a", "0", "-m", HASHCAT_MODE,
-            "--potfile-path", potfile, "--force",
-            hashfile, wordlist,
-        ]
+    def crack_hash(self, hash_value: str, mode, attack: str,
+                   wordlist_name: str = None, charsets=None, max_len=6) -> dict:
+        """
+        Crack un hash générique avec hashcat.
+          - attack == "dict"  : attaque par dictionnaire (wordlist importée)
+          - attack == "brute" : brute-force par masque (jeux de caractères + longueur)
+        `mode` est le mode hashcat (0=MD5, 100=SHA1, 1000=NTLM, 3200=bcrypt…).
+        """
+        h = (hash_value or "").strip()
+        if not h:
+            return {"found": False, "error": "hash vide."}
+        if "\n" in h or "\r" in h:
+            return {"found": False, "error": "un seul hash à la fois."}
         try:
-            run = subprocess.run(base, capture_output=True, text=True, timeout=CRACK_TIMEOUT)
+            mode = int(mode)
+        except (TypeError, ValueError):
+            return {"found": False, "error": "type de hash invalide."}
+        if shutil.which("hashcat") is None:
+            return {"found": False, "error": "hashcat n'est pas installé."}
+
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", prefix="jwtzenix_", suffix=".hash", delete=False
+        )
+        try:
+            tmp.write(h + "\n")
+            tmp.close()
+
+            if attack == "dict":
+                base = safe_name(wordlist_name or "")
+                if not base:
+                    return {"found": False, "error": "wordlist invalide."}
+                wl = os.path.join(WORDLISTS_DIR, base)
+                if not os.path.isfile(wl):
+                    return {"found": False, "error": "Wordlist introuvable : %s" % base}
+                return self._run_hashcat(tmp.name, mode, ["-a", "0"], wl, h)
+
+            if attack == "brute":
+                classes = {"l": "?l", "u": "?u", "d": "?d", "s": "?s"}
+                sel = [classes[c] for c in (charsets or []) if c in classes]
+                if not sel:
+                    return {"found": False, "error": "choisis au moins un jeu de caractères."}
+                try:
+                    n = int(max_len)
+                except (TypeError, ValueError):
+                    n = 6
+                n = max(1, min(n, 8))
+                custom = "".join(sel)          # ex. "?l?d"
+                mask = "?1" * n                 # ex. "?1?1?1?1"
+                flags = ["-a", "3", "-i", "--increment-min", "1",
+                         "--increment-max", str(n), "-1", custom]
+                return self._run_hashcat(tmp.name, mode, flags, mask, h)
+
+            return {"found": False, "error": "mode d'attaque inconnu."}
+        finally:
+            self._rm(tmp.name)
+
+    def _run_hashcat(self, hashfile, mode, mode_flags, positional, original) -> dict:
+        """Lance hashcat puis relit le clair via --show.
+          mode_flags : options d'attaque (ex. ['-a','0'] ou ['-a','3','-i',...,'-1','?l?d'])
+          positional : wordlist (attaque dict) ou masque (brute-force)
+          original   : ligne de hash écrite, pour extraire le clair."""
+        potfile = hashfile + ".pot"
+        cmd = (["hashcat", "-m", str(mode), "--potfile-path", potfile, "--force"]
+               + list(mode_flags) + [hashfile, positional])
+        try:
+            run = subprocess.run(cmd, capture_output=True, text=True, timeout=CRACK_TIMEOUT)
         except subprocess.TimeoutExpired:
             self._rm(potfile)
             return {"found": False, "error": "délai de crack dépassé (%ss)." % CRACK_TIMEOUT}
@@ -260,63 +302,36 @@ class Api:
             return {"found": False, "error": str(e)}
 
         out = (run.stdout or "") + "\n" + (run.stderr or "")
-
-        # --show relit le potfile et donne "jwt:secret"
         show = subprocess.run(
-            ["hashcat", "-m", HASHCAT_MODE, "--potfile-path", potfile, "--show", hashfile],
+            ["hashcat", "-m", str(mode), "--potfile-path", potfile, "--show", hashfile],
             capture_output=True, text=True,
         )
         self._rm(potfile)
-        secret = self._parse_show(show.stdout)
+        plain = self._parse_plain(show.stdout, original)
         full = out + "\n--- show ---\n" + (show.stdout or "")
-        if secret is not None:
-            return {"found": True, "secret": secret, "output": full}
-        # hashcat renvoie 1 quand "exhausted" sans trouver : ce n'est pas une erreur
+        if plain is not None:
+            return {"found": True, "secret": plain, "output": full}
+        # hashcat renvoie 1 quand « exhausted » sans trouver : ce n'est pas une erreur
         return {"found": False, "output": full}
-
-    def _crack_john(self, hashfile: str, wordlist: str) -> dict:
-        """Fallback expérimental John the Ripper (voir README)."""
-        try:
-            run = subprocess.run(
-                ["john", "--wordlist=%s" % wordlist, hashfile],
-                capture_output=True, text=True, timeout=CRACK_TIMEOUT,
-            )
-        except subprocess.TimeoutExpired:
-            return {"found": False, "error": "délai de crack dépassé (%ss)." % CRACK_TIMEOUT}
-        except Exception as e:  # pragma: no cover
-            return {"found": False, "error": str(e)}
-
-        show = subprocess.run(["john", "--show", hashfile], capture_output=True, text=True)
-        out = (run.stdout or "") + (run.stderr or "") + "\n--- show ---\n" + (show.stdout or "")
-        # john --show : "fichier:secret" sur la 1re ligne utile
-        secret = None
-        for line in (show.stdout or "").splitlines():
-            line = line.strip()
-            if not line or line.endswith("password hash cracked, 0 left"):
-                continue
-            if ":" in line and "cracked" not in line:
-                secret = line.split(":", 1)[1]
-                break
-        if secret:
-            return {"found": True, "secret": secret, "output": out}
-        return {"found": False, "output": out}
 
     # ---- utilitaires ------------------------------------------------------
     @staticmethod
-    def _parse_show(show_stdout: str):
-        """Extrait le secret depuis la sortie de `hashcat --show` (token:secret)."""
+    def _parse_plain(show_stdout: str, original: str):
+        """Extrait le clair depuis `hashcat --show` : ligne « <hash>:<clair> »."""
         if not show_stdout:
             return None
+        prefix = (original or "").strip() + ":"
         for line in show_stdout.splitlines():
             line = line.rstrip("\n")
             if not line:
                 continue
-            # format attendu : <jwt>:<secret> ; le JWT contient 2 points,
-            # le secret est tout ce qui suit le 3e ':'
-            # on retrouve le secret après la dernière occurrence du token.
-            m = re.match(r"^(eyJ[^\s:]+\.[^\s:]+\.[^\s:]+):(.*)$", line)
-            if m:
-                return m.group(2)
+            if line.startswith(prefix):
+                return line[len(prefix):]
+        # repli : une seule ligne de la forme hash:clair
+        for line in show_stdout.splitlines():
+            line = line.rstrip("\n")
+            if ":" in line:
+                return line.split(":", 1)[1]
         return None
 
     @staticmethod

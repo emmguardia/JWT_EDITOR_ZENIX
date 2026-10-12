@@ -13,11 +13,19 @@
       <h1>Editor</h1>
       <span class="badge" title="Zenix Web">Zenix Web</span>
     </div>
-    <p class="subtitle">Décodeur · Éditeur · Re-signature · Crack HMAC (hashcat) — tout en local</p>
+    <p class="subtitle">Décodeur · Éditeur · Re-signature · Crack hashcat — tout en local</p>
   </header>
 
-  <main>
-    <!-- ================= COLONNE GAUCHE : TOKEN ENCODÉ ================= -->
+  <nav class="tabs">
+    <button class="tab active" type="button" data-tab="jwt">JWT</button>
+    <button class="tab" type="button" data-tab="mdp">Mot de passe</button>
+  </nav>
+
+  <!-- ====================================================================== -->
+  <!-- ONGLET JWT                                                             -->
+  <!-- ====================================================================== -->
+  <main class="tab-panel" data-panel="jwt">
+    <!-- ================= TOKEN ENCODÉ ================= -->
     <section class="card" id="encoded-card">
       <div class="card-head">
         <h2>Token encodé</h2>
@@ -30,7 +38,7 @@
       <div id="decode-error" class="error" hidden></div>
     </section>
 
-    <!-- ================= COLONNE DROITE : DÉCODÉ ================= -->
+    <!-- ================= DÉCODÉ ================= -->
     <section class="card" id="decoded-card">
       <div class="card-head">
         <h2>Décodé</h2>
@@ -71,7 +79,7 @@
       </div>
     </section>
 
-    <!-- ================= SECTION CRACK ================= -->
+    <!-- ================= CRACK DU SECRET JWT ================= -->
     <section class="card wide" id="crack-card">
       <div class="card-head">
         <h2>Crack du secret HMAC</h2>
@@ -96,14 +104,7 @@
           Aucune wordlist importée. Clique <b>+ Importer…</b> : le fichier est copié
           dans <code>wordlists/</code> — tu peux ensuite le supprimer d'ailleurs.
         </p>
-        <div id="wl-msg" class="wl-msg"></div>
-      </div>
-
-      <div class="crack-options">
-        <label class="checkbox">
-          <input type="checkbox" id="opt-john" />
-          Utiliser John the Ripper (expérimental) au lieu de hashcat
-        </label>
+        <div class="wl-msg"></div>
       </div>
 
       <div class="crack-actions">
@@ -116,6 +117,96 @@
       <details id="crack-log-wrap" hidden>
         <summary>Sortie brute</summary>
         <pre id="crack-log"></pre>
+      </details>
+    </section>
+  </main>
+
+  <!-- ====================================================================== -->
+  <!-- ONGLET MOT DE PASSE                                                    -->
+  <!-- ====================================================================== -->
+  <main class="tab-panel" data-panel="mdp" hidden>
+    <section class="card wide" id="mdp-card">
+      <div class="card-head">
+        <h2>Cracker un mot de passe / hash</h2>
+        <span id="mdp-hashcat-status" class="pill pill-unknown">hashcat : vérification…</span>
+      </div>
+      <p class="hint">
+        Récupère le mot de passe derrière un hash avec <code>hashcat</code>, par
+        brute-force (masque) ou par dictionnaire. Le hash est écrit dans un fichier
+        temporaire local, jamais envoyé ailleurs.
+      </p>
+
+      <label class="block-label" for="mdp-hash">Hash à cracker</label>
+      <textarea id="mdp-hash" class="json-edit" spellcheck="false" autocomplete="off"
+        placeholder="ex. 5f4dcc3b5aa765d61d8327deb882cf99 (MD5 de « password »)"></textarea>
+
+      <div class="mdp-row">
+        <label for="mdp-type">Type de hash</label>
+        <select id="mdp-type">
+          <option value="0">MD5 (0)</option>
+          <option value="100">SHA1 (100)</option>
+          <option value="1400">SHA-256 (1400)</option>
+          <option value="1700">SHA-512 (1700)</option>
+          <option value="1000">NTLM (1000)</option>
+          <option value="3200">bcrypt (3200)</option>
+          <option value="500">md5crypt (500)</option>
+          <option value="1800">sha512crypt (1800)</option>
+        </select>
+      </div>
+
+      <div class="attack-mode">
+        <label class="radio">
+          <input type="radio" name="mdp-attack" value="brute" checked> Brute-force (masque)
+        </label>
+        <label class="radio">
+          <input type="radio" name="mdp-attack" value="dict"> Dictionnaire (wordlist)
+        </label>
+      </div>
+
+      <!-- Options brute-force -->
+      <div id="mdp-brute" class="attack-opts">
+        <div class="mdp-charsets">
+          <span class="opt-label">Jeux de caractères :</span>
+          <label class="checkbox"><input type="checkbox" id="mdp-cs-l" checked> minuscules <code>a-z</code></label>
+          <label class="checkbox"><input type="checkbox" id="mdp-cs-u"> majuscules <code>A-Z</code></label>
+          <label class="checkbox"><input type="checkbox" id="mdp-cs-d" checked> chiffres <code>0-9</code></label>
+          <label class="checkbox"><input type="checkbox" id="mdp-cs-s"> spéciaux <code>!@#…</code></label>
+        </div>
+        <div class="mdp-row">
+          <label for="mdp-maxlen">Longueur max</label>
+          <select id="mdp-maxlen">
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option selected>6</option><option>7</option><option>8</option>
+          </select>
+          <span class="hint small">teste 1 → N caractères. Au-delà de 6-7, ça peut être très long.</span>
+        </div>
+      </div>
+
+      <!-- Options dictionnaire -->
+      <div id="mdp-dict" class="attack-opts" hidden>
+        <div class="wordlist-manager">
+          <div class="wl-head">
+            <label>Wordlist utilisée <span class="dimlabel">(coche celle à utiliser)</span></label>
+            <button id="btn-wl-import-mdp" class="ghost" type="button">+ Importer…</button>
+          </div>
+          <ul id="wordlist-list-mdp" class="wl-list"></ul>
+          <p id="wl-empty-mdp" class="hint small">
+            Aucune wordlist importée. Clique <b>+ Importer…</b> (copie dans <code>wordlists/</code>).
+          </p>
+        </div>
+      </div>
+
+      <div class="wl-msg"></div>
+
+      <div class="crack-actions">
+        <button id="mdp-crack" class="danger" type="button">Cracker</button>
+        <span id="mdp-spinner" class="spinner" hidden><span class="dot"></span> Crack en cours…</span>
+      </div>
+
+      <div id="mdp-result" class="crack-result"></div>
+      <details id="mdp-log-wrap" hidden>
+        <summary>Sortie brute</summary>
+        <pre id="mdp-log"></pre>
       </details>
     </section>
   </main>

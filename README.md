@@ -27,7 +27,10 @@ hashcat en local.
   dans le dossier `wordlists/` de l'app (tu peux ensuite supprimer l'original de
   tes Téléchargements) ; *Exporter* en récupère une copie ailleurs ; *Supprimer*
   la retire du dossier. On choisit la wordlist à utiliser dans la liste.
-- **Fallback John the Ripper** (expérimental, case à cocher) — voir plus bas.
+- **Onglet « Mot de passe »** : crack d'un hash quelconque avec hashcat, en
+  **brute-force** (masque : jeux de caractères `a-z/A-Z/0-9/spéciaux` + longueur max)
+  ou par **dictionnaire** (mêmes wordlists). Choix du type de hash
+  (MD5, SHA1, SHA-256/512, NTLM, bcrypt, md5crypt, sha512crypt).
 
 ## Prérequis
 
@@ -88,11 +91,13 @@ le secret, puis *Vérifier* pour confirmer.
   Utilise *Importer…* pour en ajouter autant que tu veux ; elles sont copiées,
   donc tu peux supprimer les originaux. *Exporter* / *Supprimer* pour gérer la place.
 
-### Fallback John the Ripper (expérimental)
+### Onglet « Mot de passe »
 
-La case *Utiliser John the Ripper* lance `john --wordlist=… <fichier>` puis
-`john --show`. ⚠️ Selon ta version de John (jumbo) la reconnaissance du format
-JWT brut n'est pas garantie — **hashcat reste la méthode recommandée**.
+Pour cracker un hash qui n'est pas un JWT. Colle le hash, choisis son type, puis :
+- **Brute-force (masque)** : coche les jeux de caractères (`a-z`, `A-Z`, `0-9`,
+  spéciaux) et une longueur max ; hashcat teste toutes les combinaisons de 1 à N
+  caractères (`-a 3 -i`). Au-delà de 6-7 caractères ça peut être très long.
+- **Dictionnaire** : réutilise les wordlists importées (`-a 0`).
 
 ## ⚠️ Avertissement légal
 
