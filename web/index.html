@@ -86,10 +86,21 @@
       <textarea id="crack-token" class="json-edit" spellcheck="false" autocomplete="off"
         placeholder="(repris automatiquement du champ Token encodé)"></textarea>
 
-      <div class="crack-controls">
-        <label for="wordlist-input">Wordlist</label>
-        <input id="wordlist-input" type="text" spellcheck="false" autocomplete="off"
-          value="~/Téléchargements/wordlist-rockyou.txt" />
+      <div class="wordlist-manager">
+        <div class="wl-head">
+          <label for="wordlist-select">Wordlists (copiées dans le dossier de l'app)</label>
+          <div class="wl-actions">
+            <button id="btn-wl-import" class="ghost" type="button">Importer…</button>
+            <button id="btn-wl-export" class="ghost" type="button" disabled>Exporter</button>
+            <button id="btn-wl-delete" class="ghost" type="button" disabled>Supprimer</button>
+          </div>
+        </div>
+        <select id="wordlist-select" size="4"></select>
+        <p id="wl-empty" class="hint small">
+          Aucune wordlist importée. Clique <b>Importer…</b> : le fichier est copié
+          dans <code>wordlists/</code> — tu peux ensuite le supprimer d'ailleurs.
+        </p>
+        <div id="wl-msg" class="wl-msg"></div>
       </div>
 
       <div class="crack-options">

@@ -30,9 +30,38 @@ HASHCAT_MODE = "16500"
 CRACK_TIMEOUT = 60 * 20  # 20 min
 
 
-def expand(path: str) -> str:
-    """Développe ~ et les variables d'environnement d'un chemin."""
-    return os.path.expanduser(os.path.expandvars(path or ""))
+# Dossier des wordlists gérées par l'app. On importe dedans (copie) ; l'utilisateur
+# peut ensuite supprimer ses fichiers d'origine (Téléchargements, etc.).
+WORDLISTS_DIR = os.path.join(BASE_DIR, "wordlists")
+os.makedirs(WORDLISTS_DIR, exist_ok=True)
+
+# Types de dialogue fichier : enum FileDialog (pywebview récent), repli sur les
+# anciennes constantes si besoin.
+try:
+    DLG_OPEN = webview.FileDialog.OPEN
+    DLG_SAVE = webview.FileDialog.SAVE
+except AttributeError:  # pragma: no cover
+    DLG_OPEN = webview.OPEN_DIALOG
+    DLG_SAVE = webview.SAVE_DIALOG
+
+
+def safe_name(name: str):
+    """Renvoie un simple nom de fichier sûr (anti-traversée) ou None."""
+    base = os.path.basename(name or "")
+    if not base or base in (".", "..") or "/" in base or "\\" in base:
+        return None
+    return base
+
+
+def unique_dst(dst: str) -> str:
+    """Évite d'écraser un fichier existant en suffixant -1, -2, …"""
+    if not os.path.exists(dst):
+        return dst
+    root, ext = os.path.splitext(dst)
+    i = 1
+    while os.path.exists("%s-%d%s" % (root, i, ext)):
+        i += 1
+    return "%s-%d%s" % (root, i, ext)
 
 
 class Api:
@@ -44,6 +73,93 @@ class Api:
 
     def check_john(self) -> bool:
         return shutil.which("john") is not None
+
+    # ---- gestion des wordlists -------------------------------------------
+    def _window(self):
+        return webview.windows[0] if webview.windows else None
+
+    def list_wordlists(self) -> dict:
+        """Liste les wordlists importées dans wordlists/ (nom, taille, date)."""
+        items = []
+        try:
+            for n in sorted(os.listdir(WORDLISTS_DIR)):
+                p = os.path.join(WORDLISTS_DIR, n)
+                if os.path.isfile(p):
+                    st = os.stat(p)
+                    items.append({"name": n, "size": st.st_size, "mtime": int(st.st_mtime)})
+        except OSError as e:
+            return {"items": [], "error": str(e)}
+        return {"items": items, "dir": WORDLISTS_DIR}
+
+    def import_wordlist(self) -> dict:
+        """Ouvre un sélecteur de fichiers natif et copie la/les wordlist(s)
+        choisie(s) dans wordlists/."""
+        win = self._window()
+        if not win:
+            return {"ok": False, "error": "fenêtre indisponible"}
+        try:
+            paths = win.create_file_dialog(DLG_OPEN, allow_multiple=True)
+        except Exception as e:  # pragma: no cover
+            return {"ok": False, "error": str(e)}
+        if not paths:
+            return {"ok": False, "cancelled": True}
+
+        added, errors = [], []
+        for src in paths:
+            base = safe_name(src)
+            if not base:
+                errors.append("nom invalide : %s" % src)
+                continue
+            dst = os.path.join(WORDLISTS_DIR, base)
+            # déjà dans le dossier de l'app : rien à copier
+            if os.path.abspath(src) == os.path.abspath(dst):
+                added.append(base)
+                continue
+            dst = unique_dst(dst)
+            try:
+                shutil.copy2(src, dst)
+                added.append(os.path.basename(dst))
+            except OSError as e:
+                errors.append("%s : %s" % (base, e))
+        return {"ok": len(added) > 0, "added": added, "errors": errors}
+
+    def delete_wordlist(self, name: str) -> dict:
+        base = safe_name(name)
+        if not base:
+            return {"ok": False, "error": "nom invalide"}
+        p = os.path.join(WORDLISTS_DIR, base)
+        if not os.path.isfile(p):
+            return {"ok": False, "error": "introuvable"}
+        try:
+            os.remove(p)
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True}
+
+    def export_wordlist(self, name: str) -> dict:
+        """Copie une wordlist gérée vers un emplacement choisi (sélecteur natif)."""
+        base = safe_name(name)
+        if not base:
+            return {"ok": False, "error": "nom invalide"}
+        src = os.path.join(WORDLISTS_DIR, base)
+        if not os.path.isfile(src):
+            return {"ok": False, "error": "introuvable"}
+        win = self._window()
+        if not win:
+            return {"ok": False, "error": "fenêtre indisponible"}
+        try:
+            dest = win.create_file_dialog(DLG_SAVE, save_filename=base)
+        except Exception as e:  # pragma: no cover
+            return {"ok": False, "error": str(e)}
+        if not dest:
+            return {"ok": False, "cancelled": True}
+        if isinstance(dest, (list, tuple)):
+            dest = dest[0]
+        try:
+            shutil.copy2(src, dest)
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "path": dest}
 
     def install_hashcat(self) -> dict:
         """
@@ -87,18 +203,22 @@ class Api:
         return {"ok": False, "error": "apt a échoué (code %s)." % proc.returncode, "output": output}
 
     # ---- crack ------------------------------------------------------------
-    def crack(self, token: str, wordlist: str, use_john: bool = False) -> dict:
+    def crack(self, token: str, wordlist_name: str, use_john: bool = False) -> dict:
         """
-        Écrit le JWT dans un fichier temporaire et lance hashcat (ou John).
+        Écrit le JWT dans un fichier temporaire et lance hashcat (ou John)
+        contre une wordlist importée (nom dans wordlists/).
         Renvoie {found, secret, output, error}.
         """
         token = (token or "").strip()
-        wordlist = expand(wordlist)
+        base = safe_name(wordlist_name)
+        if not base:
+            return {"found": False, "error": "wordlist invalide."}
+        wordlist = os.path.join(WORDLISTS_DIR, base)
 
         if not token or token.count(".") < 2:
             return {"found": False, "error": "JWT invalide."}
         if not os.path.isfile(wordlist):
-            return {"found": False, "error": "Wordlist introuvable : %s" % wordlist}
+            return {"found": False, "error": "Wordlist introuvable : %s" % base}
 
         engine = "john" if use_john else "hashcat"
         if shutil.which(engine) is None:

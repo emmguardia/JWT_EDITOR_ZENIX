@@ -10,6 +10,9 @@ jwtzenix_*
 *.hash
 *.pot
 
+# wordlists importées par l'utilisateur (potentiellement volumineuses)
+wordlists/
+
 # divers OS/éditeurs
 .DS_Store
 *.swp
